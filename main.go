@@ -4,6 +4,10 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
 
 	"github.com/alecthomas/kong"
 	"github.com/sevlyar/go-daemon"
@@ -16,6 +20,10 @@ var CLI struct {
 
 	Stop struct {
 	} `cmd:"" help:"Stop audio."`
+
+	Switch struct {
+		URL string `arg:"" name:"url" help:"URL to switch to."`
+	} `cmd:"" help:"Switch audio url."`
 }
 
 func play(url string) {
@@ -36,26 +44,32 @@ func play(url string) {
 		return
 	}
 	defer ctx.Release()
-	defer exec.Command("pkill", "-x", "ffplay").Run()
 
 	log.Print("- - - - - - - - - - - - - - -")
 	log.Print("daemon started")
 
-	exec.Command("ffplay", url, "-loglevel", "quiet", "-nodisp").Run()
+	exec.Command("mplayer", url).Run()
+
+	log.Print("daemon terminated")
 }
 
 func stop() {
-	pid, err := os.ReadFile("sample.pid")
+	pidBytes, err := os.ReadFile("sample.pid")
 	if err != nil {
 		log.Print("Error reading pid file: ", err)
 		return
 	}
-	exec.Command("kill", string(pid)).Run()
-	exec.Command("pkill", "-x", "ffplay").Run()
+	pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+	if err != nil {
+		log.Print("Error parsing pid: ", err)
+		return
+	}
+	syscall.Kill(-pid, syscall.SIGKILL)
 }
 
 func main() {
 	ctx := kong.Parse(&CLI)
+
 	switch ctx.Command() {
 	case "play <url>":
 		play(ctx.Args[1])
@@ -63,6 +77,10 @@ func main() {
 		play("http://orf-live.ors-shoutcast.at/oe3-q2a")
 	case "stop":
 		stop()
+	case "switch <url>":
+		stop()
+		time.Sleep(time.Millisecond * 500)
+		play(ctx.Args[1])
 	default:
 		panic(ctx.Command())
 	}
