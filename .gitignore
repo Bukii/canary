@@ -1,0 +1,6 @@
+*.sum
+*.log
+*.pid
+
+# Binaries for programs and plugins
+bin/

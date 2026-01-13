@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/kong"
+	"github.com/itchyny/volume-go"
 	"github.com/sevlyar/go-daemon"
 )
 
@@ -24,15 +25,25 @@ var CLI struct {
 	Switch struct {
 		URL string `arg:"" name:"url" help:"URL to switch to."`
 	} `cmd:"" help:"Switch audio url."`
+
+	Volume struct {
+		Down struct {
+		} `cmd:"" help:"Decrease volume."`
+		Up struct {
+		} `cmd:"" help:"Increase volume."`
+		Set struct {
+			Level int `arg:"" name:"level" help:"Set volume level (0-100)."`
+		} `cmd:"" help:"Set volume level."`
+	} `cmd:"" help:"Volume control."`
 }
 
 func play(url string) {
 	ctx := &daemon.Context{
-		PidFileName: "sample.pid",
+		PidFileName: "/tmp/sample.pid",
 		PidFilePerm: 0644,
-		LogFileName: "sample.log",
+		LogFileName: "/tmp/sample.log",
 		LogFilePerm: 0640,
-		WorkDir:     "./",
+		WorkDir:     "/tmp/",
 		Umask:       027,
 	}
 
@@ -48,13 +59,16 @@ func play(url string) {
 	log.Print("- - - - - - - - - - - - - - -")
 	log.Print("daemon started")
 
-	exec.Command("mplayer", url).Run()
+	err = exec.Command("mplayer", url, "-softvol").Run()
+	if err != nil {
+		log.Print("Error starting mplayer: ", err)
+	}
 
 	log.Print("daemon terminated")
 }
 
 func stop() {
-	pidBytes, err := os.ReadFile("sample.pid")
+	pidBytes, err := os.ReadFile("/tmp/sample.pid")
 	if err != nil {
 		log.Print("Error reading pid file: ", err)
 		return
@@ -79,8 +93,25 @@ func main() {
 		stop()
 	case "switch <url>":
 		stop()
-		time.Sleep(time.Millisecond * 500)
+		time.Sleep(time.Millisecond * 100)
 		play(ctx.Args[1])
+	case "volume up":
+		volume.IncreaseVolume(10)
+	case "volume down":
+		volume.IncreaseVolume(-10)
+	case "volume set <level>":
+		level, err := strconv.Atoi(ctx.Args[2])
+		if err != nil {
+			log.Print("Error parsing volume level: ", err)
+			return
+		}
+		if level < 0 {
+			level = 0
+		}
+		if level > 100 {
+			level = 100
+		}
+		volume.SetVolume(level)
 	default:
 		panic(ctx.Command())
 	}
